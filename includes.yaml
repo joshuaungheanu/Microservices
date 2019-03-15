@@ -1,0 +1,9 @@
+name: Articles
+description: port number
+
+#Variables
+variables:
+        userP: 5000
+        articleP: 5100
+        commentP: 5200
+        tagP: 5300
