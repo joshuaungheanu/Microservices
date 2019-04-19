@@ -1,0 +1,52 @@
+---
+  test_name: Create a user
+
+  stages:
+    - name: create a user
+      request:
+        url: http://localhost:5000/user
+        json:
+          username: parag7
+          password: bhingre7
+          display_name: fg112111
+        method: POST
+        headers:
+          content-type: application/json
+      response:
+        status_code: 201
+
+---
+  test_name: update a user's hashed_password
+
+  stages:
+    - name: update a user hashed_password
+      request:
+          url: http://localhost:5000/user
+          json:
+            hashed_password: bhingre7
+          method: PATCH
+          auth:
+              - parag7
+              - bhingre7
+
+          headers:
+            content-type: application/json
+      response:
+          status_code: 201
+
+---
+test_name: Delete existing user
+
+stages:
+  - name: Make sure you delete existing user
+    request:
+      url: http://localhost:5000/user
+      auth:
+        - parag7
+        - bhingre7
+
+      method: DELETE
+      headers:
+        content-type: application/json
+    response:
+      status_code: 200
