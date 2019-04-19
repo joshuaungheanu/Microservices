@@ -17,8 +17,8 @@ Each user has a display name shown to other users, an email address (used as a u
 
 # The Project Team
 ## Team Members
-- Shekhar Palit
-- Rohan Bedarkar
+- Joshua Ungheanu
+- Christine
 - Akshay Bhor
 ## Project Technologies
 - Programming Language - Python
