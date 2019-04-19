@@ -1,4 +1,5 @@
-user: FLASK_APP=user FLASK_ENV=development flask run -p $PORT
-comment: FLASK_APP=comments FLASK_ENV=development flask run -p $PORT
-article: FLASK_APP=articles FLASK_ENV=development flask run -p $PORT
-tag: FLASK_APP=tags FLASK_ENV=development flask run -p $PORT
+user: FLASK_APP=users.py FLASK_ENV=development flask run -p $PORT
+comment: FLASK_APP=comments.py FLASK_ENV=development flask run -p $PORT
+article: FLASK_APP=articles.py FLASK_ENV=development flask run -p $PORT
+tag: FLASK_APP=tags.py FLASK_ENV=development flask run -p $PORT
+api: FLASK_APP=api.py FLASK_ENV=development flask run -p $PORT

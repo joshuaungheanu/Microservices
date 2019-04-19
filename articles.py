@@ -1,232 +1,185 @@
-from flask import Flask, jsonify, request, make_response, g, Response
-import sqlite3, json
-from flask_api import status
+from flask import Flask,request, g
+from flask import jsonify
+import json
+import sqlite3
 import datetime
-from flask_httpauth import HTTPBasicAuth
-from passlib.hash import sha256_crypt
+from DatabaseInstance import get_db
+# from authentication import *
+
+DATABASE = './articles.db'
 
 app = Flask(__name__)
-auth = HTTPBasicAuth()
 
-DATABASE = 'microdatabase.db'
-
-# Establish db connection
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-    return db
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
-# Add article with authentication
-@app.route("/addArticle", methods=['POST'])
-@auth.login_required
-def addArticle():
-    if (request.method == 'POST'):
+#insert articles
+@app.route('/articles',methods = ['POST'])
+def insertArticle():
+    if request.method == 'POST':
+        data = request.get_json(force = True)
+        executionState:bool = False
         try:
-            db = get_db()
-            c = db.cursor()
-            jsonData = request.get_json()
-            updateTime = datetime.datetime.now()
-            email = request.authorization.username
-            url = "127.0.0.1:5000/articles/"
-
-            if not jsonData['title'] or not jsonData['content']:
-                return jsonify({'Message': 'Missing data'})
+            cur = get_db(DATABASE).cursor()
+            current_time= datetime.datetime.now()
+            # uid = request.authorization["username"] Not required
+            # pwd = request.authorization["password"] Not required
+            cur.execute("INSERT INTO articles(title,author,content,date_created,date_modified) VALUES (:title, :author, :content, :date_created, :date_modified)",{"title":data['title'],"author":data['author'],"content": data['content'], "date_created":current_time,"date_modified":current_time })
+            last_inserted_row = cur.lastrowid
+            url_article=("http://127.0.0.1:5200/articles/"+str(last_inserted_row)+"")
+            cur.execute("UPDATE articles set url=? where article_id=?",(url_article,last_inserted_row))
+            if(cur.rowcount >=1):
+                    executionState = True
+            get_db(DATABASE).commit()
+        except:
+            get_db(DATABASE).rollback()
+            print("Error")
+        finally:
+            if executionState:
+                return jsonify(message="Data insert sucessfully"), 201
             else:
-
-                c.execute("insert into article (title, content, email, createTime, updateTime, url) values (:title, :content, :email, :createTime, :updateTime, :url)",{"title":jsonData['title'], "content":jsonData['content'], "email":email, "createTime":updateTime, "updateTime":updateTime, "url":url})
-                last = c.lastrowid
-                #c.execute("select article_id from article desc 1")
-                #article_id = c.fetchone[0]
-                url = "127.0.0.1:5000/articles/" + str(last)
-                c.execute("update article set url = (:url) where article_id = (:last)",{"url":url, "last":last})
-
-                db.commit()
-                c.execute("select article_id from article order by createTime DESC")
-                aID = c.fetchone()
-                print(aID)
-                response = Response(status = 201, mimetype = 'application/json')
-                response.headers['location'] = 'http://127.0.0.1:5000/articles/'+str(aID[0])
-
-        except sqlite3.Error as e:
-                print(e)
-                response = Response(status=409, mimetype='application/json')
-
-        return (response)
-
-# Fetch all articles
-@app.route("/fetchArticle/<title>", methods=['GET'])
-@auth.login_required
-def fetchArticle(title):
-    if (request.method == 'GET'):
-        try:
-            db = get_db()
-            c = db.cursor()
-            updateTime = datetime.datetime.now()
-            email = request.authorization.username
-            print(title)
-
-            c.execute("select article_id, title, content, createTime, updateTime from article where title = (:title)", {'title':title})
-            userArticle = c.fetchone()
-            db.commit()
-
-            if not userArticle:
-                response = Response(status = 404, mimetype = 'application/json')
-            else:
-                return jsonify(userArticle)
+                return jsonify(message="Failed to insert data"), 409
 
 
-        except sqlite3.Error as e:
-            print(e)
-            response = Response(status=409, mimetype = 'application/json')
+# Get invidiual article
+@app.route('/articles', methods= ['GET'])
+def show():
+    cur = get_db(DATABASE).cursor()
+    article_id = request.args.get('article_id')
 
-    return response
-
-
-# Edit article - last modified timestamp
-@app.route("/editArticle", methods=['PATCH'])
-@auth.login_required
-def editArticle():
-    if (request.method == 'PATCH'):
-        db = get_db()
-        c = db.cursor()
-        email = request.authorization.username
-        updateTime = datetime.datetime.now()
-
-        try:
-            jsonData = request.get_json()
-            if not jsonData['title']:
-                response = Response(status = 405, mimetype = 'application/json')
-
-            else:
-                c.execute("select * from users where email = (:email)", {'email':email})
-                userId = c.fetchone()[0]
-                print(userId)
-
-                print("hi")
-                c.execute("select * from article")
-                print(c.fetchone())
-                print("before")
-
-                c.execute("update article set title = (:newTitle), content = (:newContent), updateTime = (:updateTime) where email = (:email) and title = (:title)", {'email':email, 'title':jsonData['title'], 'newTitle':jsonData['newTitle'], 'updateTime':updateTime, 'newContent':jsonData['newContent']})
-                print("after")
-                db.commit()
-                response = Response(status=200, mimetype='application/json')
-        except sqlite3.Error as e:
-            print(e)
-            response = Response(status=409, mimetype='application/json')
-
-    return response
-
-# Delete article
-@app.route("/deleteArticle", methods=['DELETE'])
-@auth.login_required
-def deleteArticle():
-    if (request.method == 'DELETE'):
-        try:
-            db = get_db()
-            c = db.cursor()
-            jsonData = request.get_json()
-            updateTime = datetime.datetime.now()
-            email = request.authorization.username
-            if not email or not jsonData['title']:
-                response = Response(status=404, mimetype='application/json')
-
-            else:
-
-                c.execute("delete from article where email = (:email) and title = (:title)",
-                    {'email':email, 'title':jsonData['title']})
-
-                db.commit()
-                response = Response(status=200, mimetype='application/json')
-
-        except sqlite3.Error as e:
-            print(e)
-            response = Response(status=409, mimetype='application/json')
-
-    return response
-
-# Retrieve Recent article
-@app.route("/recentArticle", methods=['GET'])
-#@auth.login_required
-def recentArticle():
-        try:
-            db = get_db()
-            c = db.cursor()
-            jsonData = request.args.get('mostRecent')
-            c.execute("select title, content from article order by createTime desc limit (:jsonData)", {"jsonData":jsonData})
-            userArticle = c.fetchall()
-
-            if userArticle == ():
-                return Response(status=404, mimetype='application/json')
-            else:
-                return jsonify(userArticle)
-
-            db.commit()
-
-        except sqlite3.Error as e:
-            print(e)
-            response = Response(status=409, mimetype='application/json')
-        return response
-
-# Retrive metadata for the nth most recent article
-@app.route("/metaArticle", methods=['GET'])
-def metaArticle():
     try:
-        db = get_db()
-        c = db.cursor()
-        jsonData = request.args.get('mostRecent')
-        c.execute("select title, content, email, createTime, url from article order by createTime desc limit (:jsonData)", {"jsonData":jsonData})
-        recentArticles = c.fetchall()
+        if article_id is not None:
+            #cur.execute("SELECT * from articles WHERE article_id = " + article_id)
+            cur.execute("SELECT * from articles WHERE article_id="+article_id)
+            row = cur.fetchone()
+    except:
+        get_db(DATABASE).rollback()
+        return jsonify(message="Fail to retrieve from db"), 409
+    finally:
+        if row is None:
+            return jsonify(message="Article not found"), 404
 
-        if recentArticles == ():
-            return Response(status = 404, mimetype='application/json')
-        else:
-            return jsonify(recentArticles)
+        return jsonify(row), 200
 
-    except sqlite3.Error as e:
-            print(e)
-            response = Response(status=409, mimetype='application/json')
+#get latest n article and get all article
+@app.route('/articles',methods = ['GET'])
+def list():
+    if request.method == 'GET': # try except
+        limit = request.args.get('limit') if request.args.get('limit') else 5
+        executionState:bool = True
+        cur = get_db(DATABASE).cursor()
+        print(limit)
 
-    return response
+        try:
+            # Get the n most recent articles
+            if limit is not None :
+                cur.execute("select * from articles order by date_created desc limit :limit",  {"limit":limit})
+                row = cur.fetchall()
+                if list(row) == []:
+                    return "No such value exists\n", 204
+                return jsonify(row), 200
 
+            if limit is None and article_id is None :
+                cur.execute('''Select * from articles''')
+                row = cur.fetchall()
+                if list(row) == []:
+                    return "No such value exists\n", 204
+                return jsonify(row), 200
 
-# User Verification
-@auth.verify_password
-def verify(username, password):
-    try:
-        db = get_db()
-        c = db.cursor()
-        msg = {}
+            if article_id is not None :
+                cur.execute("SELECT * from  articles WHERE article_id="+article_id)
+                row = cur.fetchall()
+                if list(row) == []:
+                    return "No such value exists\n", 204
+                return jsonify(row), 200
 
-        c.execute("select password from users where email=(:email)", {'email':username})
-        pwd = c.fetchone()
-        if pwd is not None:
-            p = pwd[0]
-            if (sha256_crypt.verify(password,p)):
-                return True
+        except:
+            get_db(DATABASE).rollback()
+            executionState = False
+        finally:
+            if executionState == False:
+                return jsonify(message="Fail to retrieve from db"), 409
             else:
-                return False
-        else:
-            return False
+                return jsonify(row), 200
 
-    except sqlite3.Error as e:
-        print(e)
+# get meta data for n most recent
+@app.route('/articles/metadata',methods = ['GET'])
+def metaList():
+    if request.method == 'GET': # try except
+        limit = request.args.get('limit') if request.args.get('limit') else 10
+        executionState:bool = True
+        cur = get_db(DATABASE).cursor()
 
-    return False
+        try:
+            if limit is not None:
+                cur.execute("select title,author,date_created,date_modified from articles order by date_created desc limit :limit", {"limit":limit})
+                row = cur.fetchall()
 
-# List all articles
-@app.route("/display", methods=['GET'])
-@auth.login_required
-def display():
-    message = {"meaning_of_life": 42}
-    return jsonify(message)
+                if len(row) == 0:
+                    return "No such value exists\n", 204
+                return jsonify(row), 200
+
+        except:
+            get_db(DATABASE).rollback()
+            executionState = False
+        finally:
+            if executionState == False:
+                return jsonify(message="Fail to retrieve from db"), 409
+            else:
+                return jsonify(row), 200
+
+# update article
+@app.route('/articles/<id>',methods = ['PUT'])
+def updateArticle(id):
+    if request.method == 'PUT':
+        cur = get_db(DATABASE).cursor()
+        executionState:bool = True
+
+        try:
+            data = request.get_json(force = True)
+            tmod = datetime.datetime.now()
+            cur.execute("select * from articles where article_id=?",(data['article_id'],))
+            res=cur.fetchall()
+            if len(res) >0:
+                cur.execute("UPDATE articles set content=?,date_modified=? where article_id=? and author=?", (data['content'],tmod,data['article_id'], id))
+                if(cur.rowcount >=1):
+                    executionState = True
+                get_db(DATABASE).commit()
+            else:
+                return jsonify(message="Article does not exist"), 409
+        except:
+            get_db(DATABASE).rollback()
+            print("Error in update")
+        finally:
+            if executionState == True:
+                return jsonify(message="Updated article successfully"), 201
+            else:
+                return jsonify(message="Failed to update Article"), 409
+
+#delete article by article id
+@app.route('/articles/<id>', methods = ['DELETE'])
+def deleteArticle(id):
+    if request.method == 'DELETE':
+        cur = get_db(DATABASE).cursor()
+        executionState:bool = False
+        try:
+            data = request.get_json(force=True)
+            cur.execute("select * from articles where article_id=?",(data['article_id'],))
+            res=cur.fetchall()
+            if len(res) > 0:
+                cur.execute("UPDATE articles where article_id= :article_id and author= :author AND EXISTS(SELECT 1 FROM articles WHERE author=:author)",{"article_id":data['article_id'], "author":author})
+                row = cur.fetchall()
+                if cur.rowcount >= 1:
+                    executionState = True
+                get_db(DATABSE).commit()
+
+        except:
+            get_db(DATABASE).rollback()
+            print("Error")
+        finally:
+            if executionState == True:
+                return jsonify(message="Deleted article successfully"), 200
+            else:
+                return jsonify(message="Failed to delete Article"), 409
+
 
 if __name__ == '__main__':
     app.run(debug=True)
+    app.run(DATABASE='articles.db')

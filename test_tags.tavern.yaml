@@ -1,0 +1,90 @@
+---
+  test_name: Add an article with a new tag
+
+  stages:
+    - name: Adding an article with a new tag
+      request:
+        url: http://localhost:5300/tags
+        json:
+          article_id: 2
+          tag_name: '#bigwuxuddddz44'
+        method: POST
+        auth:
+          - parag
+          - bhingre
+
+        headers:
+          content-type: application/json
+      response:
+        status_code: 201
+---
+
+  test_name: List all articles with the new tag
+
+  stages:
+    - name: the list of article should be returned
+      request:
+        url: 'http://localhost:5300/tags?tag=%23bigwest'
+        method: GET
+      response:
+        status_code: 200
+
+---
+
+  test_name: Add another tag to the article
+
+  stages:
+    - name: Add another tag to the article
+      request:
+         url: http://127.0.0.1:5300/tags
+         method: PUT
+         auth:
+           - parag
+           - bhingre
+
+         json:
+           article_id: 2
+           tags: ["#tesawoooxscdd43","#sacvoddoovvvv"]
+         headers:
+           content-type: application/json
+      response:
+        status_code: 201
+
+---
+
+    test_name: Delete one of the tags from the article
+    stages:
+      - name: delete the tags related to article
+        request:
+          url: http://127.0.0.1:5300/tags
+          method: DELETE
+          auth:
+            - parag
+            - bhingre
+
+          json:
+            article_id: 7
+            tag_name: '#testHagtag63'
+          headers:
+            content-type: application/json
+        response:
+          status_code: 200
+
+---
+  test_name: Add a tag to an article that doesn’t exist
+  stages:
+    - name: delete tags of article that does not exists
+      request:
+        url: http://127.0.0.1:5300/tags
+        method: DELETE
+        auth:
+          - parag
+          - bhingre
+
+        json:
+          article_id: 70
+          tag_name: '#testHagtag1'
+        headers:
+          content-type: application/json
+      response:
+        status_code: 409

@@ -1,185 +1,137 @@
-from flask import Flask, jsonify, request, Response, g
-import sqlite3, json
-from flask_api import status
-import datetime
-from http import HTTPStatus
-from flask_httpauth import HTTPBasicAuth
-from passlib.hash import sha256_crypt
+from flask import Flask, request
+from flask import jsonify
+import json
+import sqlite3
+from datetime import datetime
+from DatabaseInstance import get_db
+
+DATABASE = './tags.db'
 
 app = Flask(__name__)
-auth = HTTPBasicAuth()
 
-DATABASE = 'microdatabase.db'
+# @app.route('/tags',methods = ['GET'])
+# def getArticlesFromTag():
+#     if request.method == 'GET':
+#         data = request.args.get('tag')
+#         cur = get_db(DATABASE).cursor()
+#         cur.execute("Select * from articles where article_id IN(Select article_id from tag_article_mapping where tag_id in (Select tag_id from tags WHERE tag_name =:tag_name ))", {"tag_name":data})
+#         row = cur.fetchall()
+#         if len(row) ==0:
+#             return "No articles containing the tags", 204
+#         else:
+#             return jsonify(row), 200
 
-# Establish db connection
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-    return db
+# tag get route (GET)(return all tag data when article id is given)
+@app.route('/tags/<string:article_id>',methods = ['GET'])
+def getTagsFromArticle(article_id):
+    if request.method == 'GET':
+        cur = get_db(DATABASE).cursor()
+        cur.execute("SELECT tag_name from tags WHERE tag_id IN (SELECT tag_id from tag_article_mapping WHERE article_id=:article_id )", {"article_id":article_id})
+        row = cur.fetchall()
+        return jsonify(row), 200
 
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        print("database closed")
-        db.close()
 
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
-
-# Password authentication
-@auth.verify_password
-def verify(username, password):
-    print("verified")
-    db = get_db()
-    c = db.cursor()
-    message = {}
-    try:
-        c.execute("select password from users where email=(:email)", {'email':username})
-        row = c.fetchone()
-        if row is not None:
-            p = row[0]
-            print(p)
-            if (sha256_crypt.verify(password,p)):
-                return True
-            else:
-                message = {
-                    'status': 201,
-                    'mesg': 'Password does not match: ' + request.url,
-                }
-                print(message)
-                return False
-        else:
-            message = {
-                'status': 201,
-                'mesg': 'User does not match: ' + request.url,
-            }
-            print(message)
-            return False
-
-    except sqlite3.Error as er:
-        print(er)
-
-    return False
-
-# Add tag to new and existing URL
-@app.route("/tag/addtag", methods=['POST'])
-#@auth.login_required
-def addTags():
-    if (request.method == 'POST'):
-        db = get_db()
-        c = db.cursor()
-        details = request.get_json()
-        update_time = datetime.datetime.now()
-        email = request.authorization.username
-
+@app.route('/tags', methods = ['POST'])
+#@requires_auth
+def addTagstoArticle():
+    if request.method == 'POST':
+        data = request.get_json(force=True)
+        executionState:bool = False
+        print(str(data))
+        cur = get_db(DATABASE).cursor()
         try:
-            tag_Details=details['tag'].split(',')
-            articleId=details['articleId']
-            for tags in tag_Details:
-                tag=tags.strip()
-                c.execute("SELECT tag_id FROM tag_head WHERE tag_name=?",(tag,))
-                rec=c.fetchall()
-                rowsaffected=len(rec)
-                if rowsaffected == 0:
-                    print("inside if")
-                    c.execute("INSERT INTO tag_head (tag_name,create_time,update_time) VALUES (?,?,?)",(tag,datetime.datetime.now(), datetime.datetime.now()))
-                    c.execute("SELECT tag_id FROM tag_head WHERE tag_name=?",(tag,))
-                    rec2=c.fetchall()
-                    tid=rec2[0][0]
-                    c.execute("INSERT INTO tag_detail (article_id,tag_id,create_time,update_time) VALUES (?,?,?,?)",(articleId,tid,datetime.datetime.now(), datetime.datetime.now()))
-                else:
-                    print("inside else")
-                    tid=rec[0][0]
-                    c.execute("INSERT INTO tag_detail VALUES (?,?,?,?)",(articleId,tid,datetime.datetime.now(), datetime.datetime.now()))
-
-                if (c.rowcount == 1):
-                    db.commit()
-                    response = Response(status=200, mimetype='application/json')
-
-                else:
-                    response = Response(status=404, mimetype='application/json')
-
-        except sqlite3.Error as er:
-            print(er)
-            response = Response(status=409, mimetype='application/json')
-
-    return response
-
-
-# Remove one or more tags
-@app.route("/tag/deletetag", methods=['DELETE'])
-#@auth.login_required
-def deletetag():
-    if (request.method == 'DELETE'):
-        try:
-            db = get_db()
-            c = db.cursor()
-            details = request.get_json()
-            artid= details['articleId']
-            tag=details['tag']
-            print(tag)
-            #for tag in tags:
-            print("in for loop" + str(artid))
-            c.execute("DELETE FROM tag_detail WHERE article_id=? AND tag_id IN (SELECT tag_id FROM tag_head WHERE tag_name=?)",(artid,str(tag),))
-            db.commit()
-            if (c.rowcount == 1):
-                db.commit()
-                response = Response(status=200, mimetype='application/json')
+            #check if tag exists or not
+            #check if the article exists or not
+            #cur.execute("SELECT * FROM articles WHERE article_id=:article_id",{"article_id":data['article_id']})
+            #articleExists = cur.fetchall()
+            if True:
+                cur.execute("INSERT INTO tags(tag_name) VALUES (:tag_name)",{"tag_name": data['tag_name']})
+                tag_id = cur.lastrowid
+                cur.execute("INSERT INTO tag_article_mapping(tag_id, article_id) VALUES(:tag_id, :article_id) ",{"tag_id":tag_id,"article_id":data['article_id']})
+                if (cur.rowcount >=1):
+                    executionState =True
+                get_db(DATABASE).commit()
+            if articleExists ==():
+                return jsonify(message="Article does not exist"), 204
+        except:
+            get_db(DATABASE).rollback()
+            print("Error")
+        finally:
+            if executionState:
+                return jsonify(message="Tag inserted successfully \n"),201
             else:
-                response = Response(status=404, mimetype='application/json')
-        except sqlite3.Error as er:
-                print(er)
-                response = Response(status=409, mimetype='application/json')
+                return jsonify(message="Failed to insert tag"),409
 
-    return response
 
-# Retrieve the tags for an individual URL
-@app.route("/tag/gettag/<artid>", methods=['GET'])
-def getarticle(artid):
-    if (request.method == 'GET'):
+#adding a new and existing tag to the article
+@app.route('/tags', methods = ['PUT'])
+#@requires_auth
+def addTagsToExistingArticle():
+    if request.method == 'PUT':
+        data = request.get_json(force=True)
+        tags =data['tags']
+        #return 204 if not found
+        print(tags)
+        executionState:bool = False
         try:
-            db = get_db()
-            db.row_factory = dict_factory
-            c = db.cursor()
-            c.execute("SELECT * FROM tag_head WHERE tag_id IN (SELECT tag_id FROM tag_detail WHERE article_id=?)",(artid,))
-            row = c.fetchall()
-            db.commit()
-            if row is not None:
-                return jsonify(row)
+            for tag in tags:
+                    cur = get_db(DATABASE).cursor()
+                    cur.execute("SELECT tag_id FROM tags WHERE tag_name=:tag_name",{"tag_name":tag})
+                    result = cur.fetchone()
+                    if str(result)!="None":
+                        tag_id =str(result[0])
+                        #add the new tag here
+                        #insert the relation if not exists
+                        cur.execute("INSERT INTO tag_article_mapping(tag_id, article_id) SELECT (:tag_id),(:article_id) WHERE NOT EXISTS(SELECT 1 FROM tag_article_mapping WHERE tag_id= :tag_id  AND article_id = :article_id)", {"tag_id":tag_id, "article_id":data['article_id']})
+                    elif str(result)=="None":
+
+                        cur.execute("INSERT INTO tags(tag_name) VALUES( :tag_name )",{"tag_name":tag})
+                        new_tag_inserted_id =cur.lastrowid
+                        cur.execute("INSERT INTO tag_article_mapping (tag_id, article_id) VALUES (:tag_id, :article_id)",{"tag_id":new_tag_inserted_id,"article_id":data['article_id']})
+            if (cur.rowcount >=1):
+                executionState =True
+            get_db(DATABASE).commit()
+        except:
+            get_db(DATABASE).rollback()
+            print("Error")
+        finally:
+            if executionState:
+                return jsonify(message="Added Tags to an existing article"),201
             else:
-                response = Response(status=404, mimetype='application/json')
+                return jsonify(message="Failed to add tags to the article"),409
 
-        except sqlite3.Error as er:
-                print(er)
-                response = Response(status=409, mimetype='application/json')
 
-    return response
 
-# Retrieve a list of URLs with a given tag
-@app.route('/tag/getarticles/<tag>',methods=['GET'])
-def getart(tag):
-    try:
-        db = get_db()
-        db.row_factory = dict_factory
-        c = db.cursor()
-        c.execute("SELECT article_id FROM tag_detail WHERE tag_id IN (SELECT tag_id FROM tag_head WHERE tag_name=?)",(tag,))
-        row = c.fetchall()
-        db.commit()
-        if row is not None:
-            return jsonify(row)
-        else:
-            response = Response(status=404, mimetype='application/json')
+@app.route('/tags', methods = ['DELETE'])
+#@requires_auth
+def deleteTagFromArticle():
+    if request.method == 'DELETE':
+        data = request.get_json(force=True)
+        #article_id = request.args.get('article_id')
+        #print(tag_name+article_id)
+        executionState:bool = False
+        cur = get_db(DATABASE).cursor()
+        try:
+            cur.execute("SELECT article_id FROM article WHERE article_id=:article_id",{"article_id":data['article_id']})
+            result = cur.fetchone()
+            if str(result)!="None":
+                #check if tag name exists or not
+                cur.execute("DELETE from tag_article_mapping where tag_id IN ( Select tag_id from tags WHERE tag_name =:tag_name) AND article_id=:article_id",{"tag_name":data['tag_name'],"article_id":data['article_id']})
+                #check for query result
+                if (cur.rowcount >=1):
+                    executionState =True
+                get_db(DATABASE).commit()
+        except:
+            get_db(DATABASE).rollback()
+            print("Error")
+        finally:
+            if executionState:
+                return jsonify(message="Deleted Tag SucessFully"),200
+            else:
+                return jsonify(message="Failed to delete tags from article"),409
 
-    except sqlite3.Error as er:
-            print(er)
-            response = Response(status=409, mimetype='application/json')
 
-    return response
 
 if __name__ == '__main__':
     app.run(debug=True)
+    app.run(DATABASE='tags.db')
